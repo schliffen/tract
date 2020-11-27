@@ -280,30 +280,7 @@ impl Tensor {
 
     fn update_strides(&mut self) {
         self.strides.clear();
-        match self.shape.len() {
-            0 => (),
-            1 => self.strides.push(1),
-            2 => self.strides.extend_from_slice(&[self.shape[1] as isize, 1]),
-            3 => self.strides.extend_from_slice(&[
-                (self.shape[1] * self.shape[2]) as isize,
-                self.shape[2] as _,
-                1,
-            ]),
-            4 => self.strides.extend_from_slice(&[
-                (self.shape[1] * self.shape[2] * self.shape[3]) as isize,
-                (self.shape[2] * self.shape[3]) as _,
-                self.shape[3] as _,
-                1,
-            ]),
-            _ => {
-                self.strides.push(1);
-                for dim in self.shape.as_ref().iter().skip(1).rev() {
-                    let previous = self.strides.last().unwrap().clone();
-                    self.strides.push(previous * *dim as isize)
-                }
-                self.strides.reverse();
-            }
-        }
+        compute_natural_stride_to(&mut self.strides, &self.shape);
     }
 
     /// Force the tensor shape, no consistency check.
@@ -387,7 +364,11 @@ impl Tensor {
         }
     }
 
-    fn clip_range_bounds(&self, axis: usize, range: impl std::ops::RangeBounds<usize>) -> Range<usize> {
+    fn clip_range_bounds(
+        &self,
+        axis: usize,
+        range: impl std::ops::RangeBounds<usize>,
+    ) -> Range<usize> {
         use std::ops::Bound;
         let start = match range.start_bound() {
             Bound::Included(ix) => *ix,
@@ -432,13 +413,15 @@ impl Tensor {
             self,
             src
         );
-        anyhow::ensure!(src_range.end <= src.shape()[axis],
+        anyhow::ensure!(
+            src_range.end <= src.shape()[axis],
             "Assigning from invalid slice (axis {}, {:?}) of {:?}",
             axis,
             src_range,
             src
         );
-        anyhow::ensure!(range.end <= self.shape()[axis],
+        anyhow::ensure!(
+            range.end <= self.shape()[axis],
             "Assigning to invalid slice (axis {}, {:?}) of {:?}",
             axis,
             range,
@@ -490,7 +473,11 @@ impl Tensor {
                 let src_start = (stride * src_range.start) as isize;
                 let len = stride * range.len();
                 if self.data != src.data {
-                    std::ptr::copy_nonoverlapping(src.data.offset(src_start), self.data.offset(dst_start), len);
+                    std::ptr::copy_nonoverlapping(
+                        src.data.offset(src_start),
+                        self.data.offset(dst_start),
+                        len,
+                    );
                 } else {
                     std::ptr::copy(src.data.offset(src_start), self.data.offset(dst_start), len);
                 }
@@ -953,6 +940,35 @@ impl fmt::Debug for Tensor {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let content = self.dump(false).unwrap_or_else(|e| format!("Error : {:?}", e));
         write!(formatter, "{}", content)
+    }
+}
+
+pub fn natural_strides(shape: &[usize]) -> TVec<isize> {
+    let mut strides = tvec!();
+    compute_natural_stride_to(&mut strides, shape);
+    strides
+}
+
+fn compute_natural_stride_to(strides: &mut TVec<isize>, shape: &[usize]) {
+    match shape.len() {
+        0 => (),
+        1 => strides.push(1),
+        2 => strides.extend_from_slice(&[shape[1] as isize, 1]),
+        3 => strides.extend_from_slice(&[(shape[1] * shape[2]) as isize, shape[2] as _, 1]),
+        4 => strides.extend_from_slice(&[
+            (shape[1] * shape[2] * shape[3]) as isize,
+            (shape[2] * shape[3]) as _,
+            shape[3] as _,
+            1,
+        ]),
+        _ => {
+            strides.push(1);
+            for dim in shape.as_ref().iter().skip(1).rev() {
+                let previous = strides.last().unwrap().clone();
+                strides.push(previous * *dim as isize)
+            }
+            strides.reverse();
+        }
     }
 }
 

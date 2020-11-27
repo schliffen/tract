@@ -74,7 +74,7 @@ pub(super) fn eval(
                     c_dt
                 )
             })?;
-        mm.c_from_data_and_strides(
+        let c_storage = mm.c_from_data_and_strides(
             if c_trans { 1 } else { c_shape[rank - 1] as isize },
             if !c_trans { 1 } else { c_shape[rank - 1] as isize },
         );
@@ -98,12 +98,22 @@ pub(super) fn eval(
                 a_prefix.push(dim.min(a.shape()[axis] - 1));
                 b_prefix.push(dim.min(b.shape()[axis] - 1));
             }
-            a_pack.pack(packed_a.view_mut(), &a.view_at_prefix(&a_prefix)?, !a_trans as usize, a_trans as usize);
-            b_pack.pack(packed_b.view_mut(), &b.view_at_prefix(&b_prefix)?, b_trans as usize, !b_trans as usize);
+            a_pack.pack(
+                packed_a.view_mut(),
+                &a.view_at_prefix(&a_prefix)?,
+                !a_trans as usize,
+                a_trans as usize,
+            );
+            b_pack.pack(
+                packed_b.view_mut(),
+                &b.view_at_prefix(&b_prefix)?,
+                b_trans as usize,
+                !b_trans as usize,
+            );
             mm.run(
-                &packed_a.view(),
-                &packed_b.view(),
-                &mut c.view_at_prefix_mut(prefix.slice())?,
+                &mm.a_packed().wrap(&packed_a.view()),
+                &mm.b_packed().wrap(&packed_b.view()),
+                &mut c_storage.wrap(&c.view_at_prefix_mut(prefix.slice())?),
                 &[],
             )?;
         }
