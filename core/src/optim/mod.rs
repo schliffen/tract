@@ -94,7 +94,7 @@ impl Optimizer {
                         seen.clear();
                         patches += 1;
                         if let Some(steps) = self.steps {
-                            if steps >= patches {
+                            if patches >= steps {
                                 return Ok(model)
                             }
                         }
